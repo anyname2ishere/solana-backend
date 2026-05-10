@@ -21,21 +21,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔗 Use Solana RPC
+// Solana connection
 const connection = new Connection(
   "https://api.mainnet-beta.solana.com",
   "confirmed"
 );
 
-// ✅ PERMANENT WALLET (from Railway variable)
+// Load backend wallet from Railway
 const payer = Keypair.fromSecretKey(
   bs58.decode(process.env.PRIVATE_KEY)
 );
 
-// 👇 Show wallet in logs (for testing)
 console.log("Backend Wallet:", payer.publicKey.toString());
 
-// ---- SOL TRANSFER ----
+
+// ======================
+// SEND SOL
+// ======================
 app.post("/send-sol", async (req, res) => {
   try {
     const { to, amount } = req.body;
@@ -48,6 +50,12 @@ app.post("/send-sol", async (req, res) => {
       })
     );
 
+    // ✅ FIX: required for Solana
+    tx.feePayer = payer.publicKey;
+
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
     const sig = await connection.sendTransaction(tx, [payer]);
 
     res.json({ success: true, sig });
@@ -57,7 +65,10 @@ app.post("/send-sol", async (req, res) => {
   }
 });
 
-// ---- SPL TOKEN TRANSFER ----
+
+// ======================
+// SEND TOKEN (MEMECOIN)
+// ======================
 app.post("/send-token", async (req, res) => {
   try {
     const { to, mint, amount } = req.body;
@@ -77,7 +88,7 @@ app.post("/send-token", async (req, res) => {
 
     const tx = new Transaction();
 
-    // Create ATA if missing (idempotent)
+    // Create ATA if it doesn't exist (idempotent)
     try {
       await getAccount(connection, toATA);
     } catch {
@@ -101,6 +112,12 @@ app.post("/send-token", async (req, res) => {
       )
     );
 
+    // ✅ FIX: required for Solana
+    tx.feePayer = payer.publicKey;
+
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
     const sig = await connection.sendTransaction(tx, [payer]);
 
     res.json({ success: true, sig });
@@ -110,4 +127,6 @@ app.post("/send-token", async (req, res) => {
   }
 });
 
+
+// START SERVER
 app.listen(5000, () => console.log("Server running"));
